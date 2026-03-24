@@ -31,17 +31,20 @@ function writeDB(data) {
   fs.writeFileSync(DB, JSON.stringify(data, null, 2));
 }
 
-// ══════════════════════════════════════
-// USER ROUTES
-// ══════════════════════════════════════
+// ── ROOT ROUTE ────────────────────────
+app.get('/', (req, res) => {
+  res.send('NooZoo Backend is running!');
+});
 
-// Register
+// ── USER ROUTES ───────────────────────
 app.post('/api/register', (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) return res.json({ ok:false, msg:'Fill in all fields' });
   if (password.length < 6) return res.json({ ok:false, msg:'Password must be 6+ chars' });
+
   const db = readDB();
   if (db.users.find(u => u.email === email)) return res.json({ ok:false, msg:'Email already registered' });
+
   const user = {
     id:           'u_' + Date.now(),
     name, email, password,
@@ -58,12 +61,12 @@ app.post('/api/register', (req, res) => {
     lastSeen:     Date.now(),
     createdAt:    new Date().toLocaleString()
   };
+
   db.users.push(user);
   writeDB(db);
   res.json({ ok:true, user });
 });
 
-// Login
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body;
   const db   = readDB();
@@ -72,7 +75,6 @@ app.post('/api/login', (req, res) => {
   res.json({ ok:true, user });
 });
 
-// Get user by ID
 app.get('/api/user/:id', (req, res) => {
   const db   = readDB();
   const user = db.users.find(u => u.id === req.params.id);
@@ -80,7 +82,6 @@ app.get('/api/user/:id', (req, res) => {
   res.json({ ok:true, user });
 });
 
-// Update user
 app.put('/api/user/:id', (req, res) => {
   const db  = readDB();
   const idx = db.users.findIndex(u => u.id === req.params.id);
@@ -90,11 +91,7 @@ app.put('/api/user/:id', (req, res) => {
   res.json({ ok:true, user: db.users[idx] });
 });
 
-// ══════════════════════════════════════
-// DEPOSIT / WITHDRAW ROUTES
-// ══════════════════════════════════════
-
-// Submit deposit or withdrawal
+// ── PENDING / PAYOUTS ─────────────────
 app.post('/api/pending', (req, res) => {
   const db = readDB();
   db.pending.push(req.body);
@@ -102,13 +99,11 @@ app.post('/api/pending', (req, res) => {
   res.json({ ok:true });
 });
 
-// Get all pending
 app.get('/api/pending', (req, res) => {
   const db = readDB();
   res.json({ ok:true, pending: db.pending });
 });
 
-// Update pending status
 app.put('/api/pending/:id', (req, res) => {
   const db  = readDB();
   const idx = db.pending.findIndex(p => p.id === req.params.id);
@@ -118,11 +113,7 @@ app.put('/api/pending/:id', (req, res) => {
   res.json({ ok:true });
 });
 
-// ══════════════════════════════════════
-// ADMIN ROUTES
-// ══════════════════════════════════════
-
-// Admin login
+// ── ADMIN ROUTES ─────────────────────
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
   const db = readDB();
@@ -134,13 +125,11 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
-// Get all users (admin)
 app.get('/api/admin/users', (req, res) => {
   const db = readDB();
   res.json({ ok:true, users: db.users });
 });
 
-// Update user balance/plan (admin fund/approve)
 app.put('/api/admin/user/:id', (req, res) => {
   const db  = readDB();
   const idx = db.users.findIndex(u => u.id === req.params.id);
@@ -150,13 +139,11 @@ app.put('/api/admin/user/:id', (req, res) => {
   res.json({ ok:true, user: db.users[idx] });
 });
 
-// Get admin stats
 app.get('/api/admin/stats', (req, res) => {
   const db = readDB();
   res.json({ ok:true, admin: db.admin });
 });
 
-// Update admin stats
 app.put('/api/admin/stats', (req, res) => {
   const db = readDB();
   db.admin = { ...db.admin, ...req.body };
@@ -164,13 +151,11 @@ app.put('/api/admin/stats', (req, res) => {
   res.json({ ok:true });
 });
 
-// Get payouts
 app.get('/api/admin/payouts', (req, res) => {
   const db = readDB();
   res.json({ ok:true, payouts: db.payouts });
 });
 
-// Add payout
 app.post('/api/admin/payouts', (req, res) => {
   const db = readDB();
   db.payouts.push(req.body);
@@ -180,5 +165,5 @@ app.post('/api/admin/payouts', (req, res) => {
 
 // ── START SERVER ──────────────────────
 app.listen(PORT, () => {
-  console.log('NooZoo server running on port ' + PORT);
+  console.log(`NooZoo server running on port ${PORT}`);
 });
