@@ -1,0 +1,11 @@
+{
+  "users": [],
+  "pending": [],
+  "payouts": [],
+  "admin": {
+    "username": "admin",
+    "password": "admin123",
+    "totalPaid": 0,
+    "lastRun": null
+  }
+}
