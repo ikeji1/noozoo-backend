@@ -3,22 +3,22 @@ const cors = require('cors');
 const mysql = require('mysql2');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
-// CONNECT TO HOSTINGER MYSQL
+/* CONNECT TO MYSQL */
 const db = mysql.createConnection({
-  host: "YOUR_HOSTINGER_HOST",
-  user: "YOUR_HOSTINGER_USERNAME",
-  password: "YOUR_HOSTINGER_PASSWORD",
-  database: "YOUR_DATABASE_NAME",
+  host: "195.35.53.16",
+  user: "noozoo_user",
+  password: "Chinecherem276",
+  database: "noozoo",
   port: 3306
 });
 
 db.connect(err => {
   if (err) {
-    console.log("MySQL connection error:", err);
+    console.log("❌ MySQL connection error:", err);
   } else {
-    console.log("MySQL Connected ✅");
+    console.log("✅ MySQL Connected");
   }
 });
 
@@ -26,13 +26,13 @@ app.use(cors());
 app.use(express.json());
 
 
-// ROOT
+/* ROOT */
 app.get("/", (req,res)=>{
   res.send("NooZoo backend running");
 });
 
 
-// REGISTER
+/* REGISTER */
 app.post("/api/register",(req,res)=>{
 
   const { name,email,password } = req.body;
@@ -77,7 +77,7 @@ app.post("/api/register",(req,res)=>{
 });
 
 
-// LOGIN
+/* LOGIN */
 app.post("/api/login",(req,res)=>{
 
   const { email,password } = req.body;
@@ -102,7 +102,7 @@ app.post("/api/login",(req,res)=>{
 });
 
 
-// GET USER
+/* GET USER */
 app.get("/api/user/:id",(req,res)=>{
 
   db.query(
@@ -125,7 +125,7 @@ app.get("/api/user/:id",(req,res)=>{
 });
 
 
-// UPDATE USER
+/* UPDATE USER */
 app.put("/api/user/:id",(req,res)=>{
 
   db.query(
@@ -145,7 +145,7 @@ app.put("/api/user/:id",(req,res)=>{
 });
 
 
-// SAVE PENDING
+/* SAVE PENDING */
 app.post("/api/pending",(req,res)=>{
 
   const id = "p_" + Date.now();
@@ -159,7 +159,7 @@ app.post("/api/pending",(req,res)=>{
 });
 
 
-// GET PENDING
+/* GET PENDING */
 app.get("/api/pending",(req,res)=>{
 
   db.query(
@@ -177,7 +177,7 @@ app.get("/api/pending",(req,res)=>{
 });
 
 
-// ADMIN LOGIN
+/* ADMIN LOGIN */
 app.post("/api/admin/login",(req,res)=>{
 
   const { username,password } = req.body;
@@ -187,7 +187,7 @@ app.post("/api/admin/login",(req,res)=>{
     [username,password],
     (err,rows)=>{
 
-      if(rows.length===0){
+      if(err || rows.length===0){
         return res.json({ ok:false });
       }
 
@@ -199,7 +199,7 @@ app.post("/api/admin/login",(req,res)=>{
 });
 
 
-// ADMIN USERS
+/* ADMIN USERS */
 app.get("/api/admin/users",(req,res)=>{
 
   db.query(
@@ -217,7 +217,7 @@ app.get("/api/admin/users",(req,res)=>{
 });
 
 
-// PAYOUT SAVE
+/* PAYOUT SAVE */
 app.post("/api/admin/payouts",(req,res)=>{
 
   const id = "pay_" + Date.now();
@@ -231,7 +231,7 @@ app.post("/api/admin/payouts",(req,res)=>{
 });
 
 
-// GET PAYOUTS
+/* GET PAYOUTS */
 app.get("/api/admin/payouts",(req,res)=>{
 
   db.query(
@@ -249,7 +249,7 @@ app.get("/api/admin/payouts",(req,res)=>{
 });
 
 
-// START SERVER
+/* START SERVER */
 app.listen(PORT,()=>{
   console.log("Server running on port",PORT);
 });
