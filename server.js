@@ -1,169 +1,255 @@
 const express = require('express');
-const cors    = require('cors');
-const fs      = require('fs');
-const path    = require('path');
+const cors = require('cors');
+const mysql = require('mysql2');
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 3000;
-const DB   = path.join(__dirname, 'db.json');
 
-// ── MIDDLEWARE ────────────────────────
+// CONNECT TO HOSTINGER MYSQL
+const db = mysql.createConnection({
+  host: "YOUR_HOSTINGER_HOST",
+  user: "YOUR_HOSTINGER_USERNAME",
+  password: "YOUR_HOSTINGER_PASSWORD",
+  database: "YOUR_DATABASE_NAME",
+  port: 3306
+});
+
+db.connect(err => {
+  if (err) {
+    console.log("MySQL connection error:", err);
+  } else {
+    console.log("MySQL Connected ✅");
+  }
+});
+
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
-// ── DATABASE HELPERS ──────────────────
-function readDB() {
-  if (!fs.existsSync(DB)) {
-    const empty = {
-      users:   [],
-      pending: [],
-      payouts: [],
-      admin:   { username:'admin', password:'admin123', totalPaid:0, lastRun:null }
-    };
-    fs.writeFileSync(DB, JSON.stringify(empty, null, 2));
-    return empty;
+
+// ROOT
+app.get("/", (req,res)=>{
+  res.send("NooZoo backend running");
+});
+
+
+// REGISTER
+app.post("/api/register",(req,res)=>{
+
+  const { name,email,password } = req.body;
+
+  if(!name || !email || !password){
+    return res.json({ ok:false, msg:"missing fields"});
   }
-  return JSON.parse(fs.readFileSync(DB, 'utf8'));
-}
 
-function writeDB(data) {
-  fs.writeFileSync(DB, JSON.stringify(data, null, 2));
-}
+  const id = "u_" + Date.now();
 
-// ── ROOT ROUTE ────────────────────────
-app.get('/', (req, res) => {
-  res.send('NooZoo Backend is running!');
+  const sql = `
+  INSERT INTO users
+  (id,name,email,password,balance,earned,deposited,withdrawn,lastSeen,createdAt)
+  VALUES (?,?,?,?,0,0,0,0,?,?)
+  `;
+
+  db.query(
+    sql,
+    [
+      id,
+      name,
+      email,
+      password,
+      Date.now(),
+      new Date().toLocaleString()
+    ],
+    (err)=>{
+
+      if(err){
+        console.log(err);
+        return res.json({ ok:false });
+      }
+
+      res.json({
+        ok:true,
+        user:{ id,name,email }
+      });
+
+    }
+  );
+
 });
 
-// ── USER ROUTES ───────────────────────
-app.post('/api/register', (req, res) => {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password) return res.json({ ok:false, msg:'Fill in all fields' });
-  if (password.length < 6) return res.json({ ok:false, msg:'Password must be 6+ chars' });
 
-  const db = readDB();
-  if (db.users.find(u => u.email === email)) return res.json({ ok:false, msg:'Email already registered' });
+// LOGIN
+app.post("/api/login",(req,res)=>{
 
-  const user = {
-    id:           'u_' + Date.now(),
-    name, email, password,
-    plan:         null,
-    rate:         0,
-    crypto:       null,
-    balance:      0,
-    earned:       0,
-    deposited:    0,
-    withdrawn:    0,
-    wallet:       '',
-    investments:  [],
-    transactions: [],
-    lastSeen:     Date.now(),
-    createdAt:    new Date().toLocaleString()
-  };
+  const { email,password } = req.body;
 
-  db.users.push(user);
-  writeDB(db);
-  res.json({ ok:true, user });
+  db.query(
+    "SELECT * FROM users WHERE email=? AND password=?",
+    [email,password],
+    (err,rows)=>{
+
+      if(err || rows.length===0){
+        return res.json({ ok:false });
+      }
+
+      res.json({
+        ok:true,
+        user:rows[0]
+      });
+
+    }
+  );
+
 });
 
-app.post('/api/login', (req, res) => {
-  const { email, password } = req.body;
-  const db   = readDB();
-  const user = db.users.find(u => u.email === email && u.password === password);
-  if (!user) return res.json({ ok:false, msg:'Invalid email or password' });
-  res.json({ ok:true, user });
+
+// GET USER
+app.get("/api/user/:id",(req,res)=>{
+
+  db.query(
+    "SELECT * FROM users WHERE id=?",
+    [req.params.id],
+    (err,rows)=>{
+
+      if(err || rows.length===0){
+        return res.json({ ok:false });
+      }
+
+      res.json({
+        ok:true,
+        user:rows[0]
+      });
+
+    }
+  );
+
 });
 
-app.get('/api/user/:id', (req, res) => {
-  const db   = readDB();
-  const user = db.users.find(u => u.id === req.params.id);
-  if (!user) return res.json({ ok:false, msg:'User not found' });
-  res.json({ ok:true, user });
+
+// UPDATE USER
+app.put("/api/user/:id",(req,res)=>{
+
+  db.query(
+    "UPDATE users SET ? WHERE id=?",
+    [req.body,req.params.id],
+    (err)=>{
+
+      if(err){
+        return res.json({ ok:false });
+      }
+
+      res.json({ ok:true });
+
+    }
+  );
+
 });
 
-app.put('/api/user/:id', (req, res) => {
-  const db  = readDB();
-  const idx = db.users.findIndex(u => u.id === req.params.id);
-  if (idx === -1) return res.json({ ok:false, msg:'User not found' });
-  db.users[idx] = { ...db.users[idx], ...req.body };
-  writeDB(db);
-  res.json({ ok:true, user: db.users[idx] });
+
+// SAVE PENDING
+app.post("/api/pending",(req,res)=>{
+
+  const id = "p_" + Date.now();
+
+  db.query(
+    "INSERT INTO pending (id,data) VALUES (?,?)",
+    [id,JSON.stringify(req.body)],
+    ()=> res.json({ ok:true })
+  );
+
 });
 
-// ── PENDING / PAYOUTS ─────────────────
-app.post('/api/pending', (req, res) => {
-  const db = readDB();
-  db.pending.push(req.body);
-  writeDB(db);
-  res.json({ ok:true });
+
+// GET PENDING
+app.get("/api/pending",(req,res)=>{
+
+  db.query(
+    "SELECT * FROM pending",
+    (err,rows)=>{
+
+      res.json({
+        ok:true,
+        pending: rows.map(x=>JSON.parse(x.data))
+      });
+
+    }
+  );
+
 });
 
-app.get('/api/pending', (req, res) => {
-  const db = readDB();
-  res.json({ ok:true, pending: db.pending });
+
+// ADMIN LOGIN
+app.post("/api/admin/login",(req,res)=>{
+
+  const { username,password } = req.body;
+
+  db.query(
+    "SELECT * FROM admin WHERE username=? AND password=?",
+    [username,password],
+    (err,rows)=>{
+
+      if(rows.length===0){
+        return res.json({ ok:false });
+      }
+
+      res.json({ ok:true });
+
+    }
+  );
+
 });
 
-app.put('/api/pending/:id', (req, res) => {
-  const db  = readDB();
-  const idx = db.pending.findIndex(p => p.id === req.params.id);
-  if (idx === -1) return res.json({ ok:false, msg:'Not found' });
-  db.pending[idx] = { ...db.pending[idx], ...req.body };
-  writeDB(db);
-  res.json({ ok:true });
+
+// ADMIN USERS
+app.get("/api/admin/users",(req,res)=>{
+
+  db.query(
+    "SELECT * FROM users",
+    (err,rows)=>{
+
+      res.json({
+        ok:true,
+        users:rows
+      });
+
+    }
+  );
+
 });
 
-// ── ADMIN ROUTES ─────────────────────
-app.post('/api/admin/login', (req, res) => {
-  const { username, password } = req.body;
-  const db = readDB();
-  const a  = db.admin;
-  if (username === a.username && password === a.password) {
-    res.json({ ok:true });
-  } else {
-    res.json({ ok:false, msg:'Wrong credentials' });
-  }
+
+// PAYOUT SAVE
+app.post("/api/admin/payouts",(req,res)=>{
+
+  const id = "pay_" + Date.now();
+
+  db.query(
+    "INSERT INTO payouts (id,data) VALUES (?,?)",
+    [id,JSON.stringify(req.body)],
+    ()=> res.json({ ok:true })
+  );
+
 });
 
-app.get('/api/admin/users', (req, res) => {
-  const db = readDB();
-  res.json({ ok:true, users: db.users });
+
+// GET PAYOUTS
+app.get("/api/admin/payouts",(req,res)=>{
+
+  db.query(
+    "SELECT * FROM payouts",
+    (err,rows)=>{
+
+      res.json({
+        ok:true,
+        payouts: rows.map(x=>JSON.parse(x.data))
+      });
+
+    }
+  );
+
 });
 
-app.put('/api/admin/user/:id', (req, res) => {
-  const db  = readDB();
-  const idx = db.users.findIndex(u => u.id === req.params.id);
-  if (idx === -1) return res.json({ ok:false, msg:'User not found' });
-  db.users[idx] = { ...db.users[idx], ...req.body };
-  writeDB(db);
-  res.json({ ok:true, user: db.users[idx] });
-});
 
-app.get('/api/admin/stats', (req, res) => {
-  const db = readDB();
-  res.json({ ok:true, admin: db.admin });
-});
-
-app.put('/api/admin/stats', (req, res) => {
-  const db = readDB();
-  db.admin = { ...db.admin, ...req.body };
-  writeDB(db);
-  res.json({ ok:true });
-});
-
-app.get('/api/admin/payouts', (req, res) => {
-  const db = readDB();
-  res.json({ ok:true, payouts: db.payouts });
-});
-
-app.post('/api/admin/payouts', (req, res) => {
-  const db = readDB();
-  db.payouts.push(req.body);
-  writeDB(db);
-  res.json({ ok:true });
-});
-
-// ── START SERVER ──────────────────────
-app.listen(PORT, () => {
-  console.log(`NooZoo server running on port ${PORT}`);
+// START SERVER
+app.listen(PORT,()=>{
+  console.log("Server running on port",PORT);
 });
